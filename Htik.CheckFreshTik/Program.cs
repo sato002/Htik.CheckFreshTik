@@ -14,9 +14,13 @@ namespace Htik.CheckFreshTik
     {
         static async Task Main(string[] args)
         {
-            // Define the path to the input file
-            string filePath = "usernames.txt"; // Replace with your file path
-            string outputFilePath = "fresh.txt";   // Replace with your desired output file path
+            Console.OutputEncoding = Encoding.UTF8;
+
+            string filePath = "usernames.txt";
+            string freshFilePath = "fresh.txt"; 
+            string dieFilePath = "die.txt";
+            string unknowFilePath = "unknown.txt";
+            string errorFilePath = "error.txt";
 
             // define config
             int delayMs = int.Parse(ConfigurationManager.AppSettings["delayEachLine"]);
@@ -30,16 +34,27 @@ namespace Htik.CheckFreshTik
             }
 
             // Clear the output file by creating or overwriting it with an empty string
-            File.WriteAllText(outputFilePath, string.Empty);
+            File.WriteAllText(freshFilePath, string.Empty);
+            File.WriteAllText(dieFilePath, string.Empty);
+            File.WriteAllText(unknowFilePath, string.Empty); 
+            File.WriteAllText(errorFilePath, string.Empty);
 
             // Read all lines (usernames) from the file
             var usernames = File.ReadAllLines(filePath);
 
+            int count = 0;
+            int freshCount = 0;
+            int dieCount = 0;
+            int unknowCount = 0;
+            int errorCount = 0;
             // Create an HttpClient instance
             using (HttpClient client = new HttpClient())
             {
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1");
+
                 foreach (var username in usernames)
                 {
+                    count += 1;
                     try
                     {
                         if(!String.IsNullOrWhiteSpace(username))
@@ -57,30 +72,43 @@ namespace Htik.CheckFreshTik
                                 string htmlContent = await response.Content.ReadAsStringAsync();
                                 if (htmlContent.Contains("\"webapp.user-detail\":{\"userInfo\""))
                                 {
-                                    Console.WriteLine($"[data-e2e=\"user-title\"] found for user: {username}");
+                                    Console.WriteLine($"{count} Sống: {username}");
 
                                     // Write the username to the output file
-                                    File.AppendAllText(outputFilePath, $"{username}{Environment.NewLine}");
+                                    File.AppendAllText(freshFilePath, $"{username}{Environment.NewLine}");
+                                    freshCount++;
+                                }
+                                else if(htmlContent.Contains("\"webapp.user-detail\":{\"statusCode\":10221"))
+                                {
+                                    Console.WriteLine($"{count} Chết: {username}");
+                                    File.AppendAllText(dieFilePath, $"{username}{Environment.NewLine}");
+                                    dieCount++;
                                 }
                                 else
                                 {
-                                    Console.WriteLine($"[data-e2e=\"user-title\"] not found for user: {username}");
+                                    Console.WriteLine($"{count} Không xác định: {username}");
+                                    File.AppendAllText(unknowFilePath, $"{username}{Environment.NewLine}");
+                                    unknowCount++;
                                 }
                             }
                             else
                             {
-                                Console.WriteLine($"Failed to retrieve {username}: {response.StatusCode}");
+                                Console.WriteLine($"Lỗi khi lướt tiktok {username}: {response.StatusCode}");
+                                File.AppendAllText(errorFilePath, $"{username}{Environment.NewLine}");
+                                errorCount++;
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error retrieving {username}: {ex.Message}");
+                        Console.WriteLine($"Exception {username}: {ex.Message}");
+                        File.AppendAllText(errorFilePath, $"{username}{Environment.NewLine}");
+                        errorCount++;
                     }
                 }
             }
 
-            Console.WriteLine("Processing completed. Check output file for results.");
+            Console.WriteLine($"Hoàn thành check Sống: ${freshCount}, chết: ${dieCount}, không xác định: ${unknowCount}, lỗi: ${errorCount}.");
             Console.ReadKey();
         }
     }
